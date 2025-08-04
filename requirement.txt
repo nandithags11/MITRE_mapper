@@ -1,0 +1,6 @@
+openai
+psycopg2-binary
+python-dotenv
+fastapi
+jinja2
+uvicorn
