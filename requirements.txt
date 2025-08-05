@@ -2,5 +2,6 @@ openai
 psycopg2-binary
 python-dotenv
 fastapi
+python-multipart
 jinja2
-uvicorn
+uvicorn[standard]

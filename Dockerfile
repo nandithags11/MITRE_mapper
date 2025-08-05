@@ -1,24 +1,20 @@
-# Use an official Python image
-FROM python:3.11-slim
+# Dockerfile.fastapi
+
+FROM python:3.10-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy your project files
-COPY . .
+# Copy source code
+COPY . /app
 
-# Install Python dependencies
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-
-# Set environment variables (optional; use .env for secrets)
-ENV PYTHONUNBUFFERED=1
-
-# Entry point (optional)
-CMD ["python", "upload_log.py", "path/to/nginx.log"]
+# Run FastAPI app with Uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

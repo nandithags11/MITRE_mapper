@@ -1,9 +1,9 @@
 import os
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from psycopg2
+import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS upload_metadata (
 """)
 
 @app.get("/", response_class=HTMLResponse)
-def upload_file(request):
+def home(request : Request):
     return templates.TemplateResponse("upload.html", {"request": request})
 
 @app.post("/uploadfile/")
