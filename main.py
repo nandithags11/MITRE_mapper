@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS upload_metadata (
     id SERIAL PRIMARY KEY,
     filename TEXT NOT NULL,
     table_name TEXT NOT NULL
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 """)
 

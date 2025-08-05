@@ -20,21 +20,22 @@ DB_CONFIG = {
     "port": int(os.getenv("DB_PORT", 5432))
 }
 
-TABLE_NAME ="nginx_logs"
 
 # readfile to stripe first 5 lines
 def read_lines(filepath):
     with open(filepath,"r") as f:
-        return [next(f).stripe() for _ in range(5)]
+        return [next(f).strip() for _ in range(5)]
 
 #schema for file path
 def gpt_schema(sample):
     prompt = f"""These are the first 5 lines of an NGINX log file:
 {chr(10).join(sample)} lines of an NGINX log file:
-{chr(10).join(sample)} lines of an NGINX log file:
-{chr(10).join(sample)}
+Please infer a SQL schema in PostgreSQL format with 2 extra columns:
+- MITRE_TTP (text)
+- malicious (boolean)
 
-Please infer a SQL schema in PostgreSQL format with adding 2 more columns of MITRE_TTP as str and malicious as binary column. Output only the CREATE TABLE statement."""
+Output only the CREATE TABLE statement."""
+
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
@@ -42,13 +43,20 @@ Please infer a SQL schema in PostgreSQL format with adding 2 more columns of MIT
     return response['choices'][0]['message']['content']
 
 #create table in db 
-def create_table(conn,sql_schema):
+def create_table(conn,sql_schema,TABLE_NAME):
     cur = conn.cursor()
-    cur.execute(f"DROP TABLE IF EXISTS {TABLE_NAME};")
-    clean_stmt = sql_schema.replace("AUTOINCREMENT", "GENERATED ALWAYS AS IDENTITY")
-    cur.execute(clean_stmt)
-    conn.commit()
+    try:
+        cur.execute(f"DROP TABLE IF EXISTS {TABLE_NAME};")
+        clean_stmt = sql_schema.replace("AUTOINCREMENT", "GENERATED ALWAYS AS IDENTITY")
+        cur.execute(clean_stmt)
+        conn.commit()
+    except Exception as e:
+        print(f"Error creating table {TABLE_NAME}: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
 
+#insert lines into table
 def insert_lines(conn,filepath):
     cur = conn.cursor()
     with open(filepath, "r") as f:
@@ -59,28 +67,52 @@ def insert_lines(conn,filepath):
     conn.commit()
 
 
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: python upload_log.py <nginx_log_file>")
-        return
-    
-    filepath = sys.argv[1]
+#update metadata table
+def mark_file_as_updated(conn, meta_table):
+    cur = conn.cursor()
+    cur.execute("""
+        UPDATE upload_metadata
+        SET file_status = 'updated',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE filename = %s;
+    """, (meta_table,))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+# main function to process log file
+def process_log_file(filepath):
     if not os.path.exists(filepath):
         print("File not found.")
-        return
+        return 
+    
+    #global variable for table name
+    global TABLE_NAME
+    filename_only = os.path.basename(filepath)
+    TABLE_NAME = filename_only.replace('.', '_')
 
+    conn = psycopg2.connect(**DB_CONFIG)
+
+    
     sample = read_lines(filepath)
     print("Calling GPT for schema ...")
 
     sql_schema =gpt_schema(sample)
     print(sql_schema)
 
-    conn = psycopg2.connect(**DB_CONFIG)
-    create_table(conn,sql_schema)
-    insert_lines(conn, filepath)
-    print("Logs inserted into pg")
+    create_table(conn,sql_schema,TABLE_NAME)
 
-
+    # Insert lines into the table and update metadata table
+    try:
+        insert_lines(conn, filepath, TABLE_NAME)
+        mark_file_as_updated(conn, filename_only)
+        print(f"Processed and marked {filename_only} as updated.")
+    except Exception as e:
+        print(f"Error processing file: {e}")
+        conn.rollback()
 
 if __name__ =='__main__':
-    main()
+    if len(sys.argv) != 2:
+        print("Usage: python dbschema.py <log_file>")
+    else:
+        process_log_file(sys.argv[1])
