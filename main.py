@@ -5,7 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import psycopg2
 from dotenv import load_dotenv
-
+import threading
+from watchdog_upload import start_watchdog
 load_dotenv()
 
 app = FastAPI()
@@ -26,13 +27,13 @@ cur = conn.cursor()
 
 #created upload metadat table
 cur.execute("""
-CREATE TABLE IF NOT EXISTS upload_metadata (
+CREATE TABLE IF NOT EXISTS upload_metadata(
     id SERIAL PRIMARY KEY,
     filename TEXT NOT NULL,
-    table_name TEXT NOT NULL
+    table_name TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """)
 
@@ -56,3 +57,8 @@ async def upload_file(file: UploadFile = File(...)):
     conn.commit()
     
     return {"info": f"File '{file.filename}' uploaded successfully", "table_name": table_name}
+
+@app.on_event("startup")
+def start_watchdog_tread():
+    threading.Thread(target=start_watchdog,daemon=True).start()
+    
