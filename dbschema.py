@@ -1,14 +1,15 @@
-import openai
+from openai import OpenAI
 import psycopg2
 import sys
 import os
 from dotenv import load_dotenv
 
+
 # Load env variables
 load_dotenv()
 
 # openai key
-openai.api_key =os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key="OPENAI_API_KEY")
 
 # Pg conf
 
@@ -36,7 +37,7 @@ Please infer a SQL schema in PostgreSQL format with 2 extra columns:
 
 Output only the CREATE TABLE statement."""
 
-    response = openai.ChatCompletion.create(
+    response = client.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
     )
