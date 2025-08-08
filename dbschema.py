@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # openai key
-client = OpenAI(api_key="OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
 
 # Pg conf
 
@@ -28,20 +30,20 @@ def read_lines(filepath):
         return [next(f).strip() for _ in range(5)]
 
 #schema for file path
-def gpt_schema(sample):
+def gpt_schema(sample,TABLE_NAME):
     prompt = f"""These are the first 5 lines of an NGINX log file:
 {chr(10).join(sample)} lines of an NGINX log file:
 Please infer a SQL schema in PostgreSQL format with 2 extra columns:
 - MITRE_TTP (text)
 - malicious (boolean)
 
-Output only the CREATE TABLE statement."""
+Output only the CREATE {TABLE_NAME} statement."""
 
-    response = client.ChatCompletion.create(
+    response = client.responses.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
+        input=prompt,
     )
-    return response['choices'][0]['message']['content']
+    return response.output_text
 
 #create table in db 
 def create_table(conn,sql_schema,TABLE_NAME):
@@ -58,7 +60,7 @@ def create_table(conn,sql_schema,TABLE_NAME):
         cur.close()
 
 #insert lines into table
-def insert_lines(conn,filepath):
+def insert_lines(conn,filepath,TABLE_NAME):
     cur = conn.cursor()
     with open(filepath, "r") as f:
         for line in f:
@@ -79,6 +81,8 @@ def mark_file_as_updated(conn, meta_table):
     """, (meta_table,))
     conn.commit()
     cur.close()
+
+    
     conn.close()
 
 # main function to process log file
@@ -98,7 +102,7 @@ def process_log_file(filepath):
     sample = read_lines(filepath)
     print("Calling GPT for schema ...")
 
-    sql_schema =gpt_schema(sample)
+    sql_schema =gpt_schema(sample,TABLE_NAME)
     print(sql_schema)
 
     create_table(conn,sql_schema,TABLE_NAME)
